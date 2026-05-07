@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  ActivityIndicator,
   Text,
   View,
 } from "react-native";
@@ -48,8 +47,6 @@ export default function UploadInventoryScreen() {
     setScrollToError,
     selectedTags,
     handleToggleTag,
-    submitting,
-    submitMessage,
   } = useUploadInventory();
 
   // Separate refs for different scroll views
@@ -242,25 +239,16 @@ export default function UploadInventoryScreen() {
           ) : (
             <Pressable
               onPress={handleSubmit}
-              disabled={!canSubmit || submitting}
-              className={`flex-1 rounded-full py-3 items-center ${canSubmit && !submitting ? "bg-[#0B73FF]" : "bg-slate-200"
+              disabled={!canSubmit}
+              className={`flex-1 rounded-full py-3 items-center ${canSubmit ? "bg-[#0B73FF]" : "bg-slate-200"
                 }`}
             >
-              {submitting ? (
-                <View className="flex-row items-center gap-2">
-                  <ActivityIndicator size="small" color="#64748B" />
-                  <Text className="text-sm font-semibold text-slate-500">
-                    {submitMessage}
-                  </Text>
-                </View>
-              ) : (
-                <Text
-                  className={`text-sm font-semibold ${canSubmit ? "text-white" : "text-slate-500"
-                    }`}
-                >
-                  Submit
-                </Text>
-              )}
+              <Text
+                className={`text-sm font-semibold ${canSubmit ? "text-white" : "text-slate-500"
+                  }`}
+              >
+                Submit
+              </Text>
             </Pressable>
           )}
         </View>

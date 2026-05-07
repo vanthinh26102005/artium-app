@@ -54,9 +54,7 @@ export type ArtworkDetail = {
     shares?: number;
   };
 
-  saleMode?: "fixed" | "auction";
-  auctionId?: string;
-  status?: "for_sale" | "on_auction" | "sold";
+  status?: "for_sale" | "sold";
   isActive?: boolean;
   soldAt?: number;
   soldByInvoiceId?: string;

@@ -92,7 +92,6 @@ function NewsCard({
         contentFit="cover"
         transition={0}
         cachePolicy="memory-disk"
-        priority="high"
       />
 
       <View className="absolute inset-0">

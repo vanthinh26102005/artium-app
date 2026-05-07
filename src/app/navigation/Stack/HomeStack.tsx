@@ -25,7 +25,6 @@ import InvoicesScreen from "../../../screens/InvoicesScreen";
 import CreateInvoiceScreen from "../../../screens/CreateInvoiceScreen";
 import InvoiceDetailScreen from "../../../screens/InvoiceDetailScreen";
 import PreviewInvoiceScreen from "../../../screens/PreviewInvoiceScreen";
-import ArtViewARScreen from "../../../screens/ArtViewARScreen";
 
 export type HomeStackParamList = {
   HomeMain: undefined;
@@ -55,12 +54,6 @@ export type HomeStackParamList = {
   };
   Blog: undefined;
   EditArtwork: { artwork: ArtworkDetail };
-  ArtViewAR: {
-    artworkId: string;
-    title: string;
-    imageUrl?: string;
-    dimension?: { w?: number; h?: number; unit?: string };
-  };
 };
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
@@ -94,7 +87,6 @@ export default function HomeStack() {
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} />
       <Stack.Screen name="EditArtwork" component={EditArtworkScreen} />
-      <Stack.Screen name="ArtViewAR" component={ArtViewARScreen} />
     </Stack.Navigator>
   );
 }

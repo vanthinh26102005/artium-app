@@ -83,12 +83,6 @@ export default function HomeScreen() {
   const followingCardWidth = sellCardWidth;
   const sellCardHeight = Math.round(sellCardWidth * (4 / 3) + 96);
   const seeMoreCardHeight = sellCardMeasuredHeight ?? sellCardHeight;
-  const hasAnyHomeContent =
-    news.length > 0 ||
-    blogs.length > 0 ||
-    events.length > 0 ||
-    sellItemsPreview.length > 0 ||
-    following.length > 0;
   const highlights = useMemo(() => {
     const result: HighlightItem[] = [];
     const max = Math.max(blogs.length, events.length);
@@ -181,7 +175,7 @@ export default function HomeScreen() {
         onHeightChange={(h) => setHeaderHeight(h)}
         underlineSource={UnderlineHome}
       />
-      {isLoading && !hasAnyHomeContent ? (
+      {isLoading ? (
         <HomeSkeleton
           highlightCardWidth={highlightCardWidth}
           highlightCardHeight={highlightCardHeight}
@@ -189,7 +183,7 @@ export default function HomeScreen() {
           sellCardHeight={sellCardHeight}
           followingCardWidth={followingCardWidth}
         />
-      ) : error && !hasAnyHomeContent ? (
+      ) : error ? (
         <View className="flex-1 justify-center items-center p-4">
           <Text className="text-lg text-red-500 text-center">
             Failed to load home content. Please try again later.

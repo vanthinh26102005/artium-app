@@ -3,8 +3,6 @@ import { View, Text, Pressable, ViewStyle, Animated as RNAnimated } from "react-
 import { Ionicons } from "@expo/vector-icons";
 import IconButton from "./ui/IconButton";
 
-type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
-
 type ArtworkActionBarProps = {
   liked: boolean;
   saved: boolean;
@@ -15,8 +13,6 @@ type ArtworkActionBarProps = {
   onSave: () => void;
   onBuy: () => void;
   buyDisabled?: boolean;
-  primaryLabel?: string;
-  primaryIcon?: IoniconName;
 };
 
 const actionBarShadow: ViewStyle = {
@@ -37,10 +33,8 @@ export default function ArtworkActionBar({
   onSave,
   onBuy,
   buyDisabled = false,
-  primaryLabel,
-  primaryIcon = "cart-outline",
 }: ArtworkActionBarProps) {
-  const buyLabel = primaryLabel ?? (buyDisabled ? "Sold" : "Buy now");
+  const buyLabel = buyDisabled ? "Sold" : "Buy now";
   return (
     <RNAnimated.View
       className="absolute left-3 right-3 rounded-full bg-white border border-slate-200 flex-row items-center px-3"
@@ -78,7 +72,7 @@ export default function ArtworkActionBar({
           buyDisabled ? "bg-slate-300" : "bg-[#0B73FF]"
         }`}
       >
-        <Ionicons name={primaryIcon} size={18} color="#ffffff" />
+        <Ionicons name="cart-outline" size={18} color="#ffffff" />
         <Text className="text-white font-semibold">{buyLabel}</Text>
       </Pressable>
     </RNAnimated.View>

@@ -33,11 +33,6 @@ export type Artwork = {
   isTrending?: boolean;
   price?: string;
   location?: string;
-  saleMode?: "fixed" | "auction";
-  auctionId?: string;
-  status?: "for_sale" | "on_auction" | "sold" | string;
-  auctionCurrentBid?: number;
-  auctionCurrency?: string;
 };
 
 export type ArtistProfile = {

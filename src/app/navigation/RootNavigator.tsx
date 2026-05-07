@@ -19,7 +19,6 @@ import { functions } from "../../configs/firebase";
 
 import InboxScreen from "../../screens/InboxScreen";
 import ChatScreen from "../../screens/ChatScreen";
-import ArtViewARScreen from "../../screens/ArtViewARScreen";
 
 type AppStackParamList = {
   Tabs: { screen?: keyof TabParamList; params?: TabParamList[keyof TabParamList] } | undefined;
@@ -29,12 +28,6 @@ type AppStackParamList = {
   Notifications: undefined;
   Inbox: undefined;
   Chat: { chatId: string; otherUserName?: string };
-  ArtViewAR: {
-    artworkId: string;
-    title: string;
-    imageUrl?: string;
-    dimension?: { w?: number; h?: number; unit?: string };
-  };
 };
 
 type RootNavigatorProps = {
@@ -85,11 +78,6 @@ function AppStack() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ArtViewAR"
-        component={ArtViewARScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

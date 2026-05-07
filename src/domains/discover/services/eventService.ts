@@ -117,7 +117,7 @@ const fetchEventAttendeeCount = async (eventId: string, excludeOrganizerId?: str
     const counts = await fetchEventGuestCounts(eventId, excludeOrganizerId);
     return counts.going + counts.invited;
   } catch (error) {
-    console.warn(`Unable to count attendees for event ${eventId}:`, error);
+    console.error(`Error counting attendees for event ${eventId}:`, error);
     return 0;
   }
 };
@@ -138,11 +138,9 @@ const attachAttendeeCounts = async (events: EventItem[], excludeOrganizerId?: st
  */
 export const getEvents = async (
   pageSize: number,
-  lastVisible: QueryDocumentSnapshot<DocumentData> | null = null,
-  options: { includeAttendeeCounts?: boolean } = {}
+  lastVisible: QueryDocumentSnapshot<DocumentData> | null = null
 ): Promise<PaginatedEventsResult> => {
   try {
-    const { includeAttendeeCounts = true } = options;
     const eventsQuery = lastVisible
       ? query(
           collection(firestore, EVENTS_COLLECTION),
@@ -157,10 +155,9 @@ export const getEvents = async (
         );
 
     const snapshot = await getDocs(eventsQuery);
-    const baseEvents = snapshot.docs.map((doc) => mapEventDoc(doc));
-    const events = includeAttendeeCounts
-      ? await attachAttendeeCounts(baseEvents)
-      : baseEvents;
+    const events = await attachAttendeeCounts(
+      snapshot.docs.map((doc) => mapEventDoc(doc))
+    );
 
     return {
       events,
@@ -397,7 +394,7 @@ export const fetchEventGuestCounts = async (eventId: string, excludeOrganizerId?
           }
         }
       } catch (error) {
-        console.warn("Unable to check organizer RSVP:", error);
+        console.error("Error checking organizer RSVP:", error);
       }
     }
 
@@ -407,7 +404,7 @@ export const fetchEventGuestCounts = async (eventId: string, excludeOrganizerId?
       invited: adjustedInvited,
     };
   } catch (error) {
-    console.warn("Unable to count guests:", error);
+    console.error("Error counting guests:", error);
     return { going: 0, maybe: 0, invited: 0 };
   }
 };
