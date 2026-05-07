@@ -86,6 +86,14 @@
         }
       }
 
+      match /auctionDeposits/{depositId} {
+        allow read: if isSignedIn() && (
+          resource.data.bidderId == request.auth.uid ||
+          get(/databases/$(database)/documents/auctions/$(resource.data.auctionId)).data.artistId == request.auth.uid
+        );
+        allow create, update, delete: if false;
+      }
+
       match /editorials/{editorialId} {
         allow read: if true;
         allow write: if false; // No client-side writes allowed

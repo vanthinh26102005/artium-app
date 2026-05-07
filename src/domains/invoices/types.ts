@@ -42,6 +42,7 @@ export type InvoiceItem = {
 
 export type InvoiceTotals = {
   subtotal: number;
+  depositApplied?: number;
   discount?: number;
   tax?: number;
   shipping?: number;
@@ -55,6 +56,8 @@ export type Invoice = {
   type?: "auction" | string;
   auctionId?: string;
   artworkId?: string;
+  depositId?: string;
+  depositApplied?: number;
   status: InvoiceStatus;
   deliveryMethod?: InvoiceDeliveryMethod;
   shippingAddress?: AddressForm;

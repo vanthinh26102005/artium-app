@@ -47,6 +47,8 @@ const mapInvoice = (id: string, data: any): Invoice => ({
   type: data.type,
   auctionId: data.auctionId,
   artworkId: data.artworkId,
+  depositId: data.depositId,
+  depositApplied: data.depositApplied,
   status: data.status ?? "draft",
   deliveryMethod: data.deliveryMethod,
   shippingAddress: data.shippingAddress,

@@ -91,6 +91,8 @@ const mapInvoiceData = (id: string, data: any): Invoice => ({
   type: data.type,
   auctionId: data.auctionId,
   artworkId: data.artworkId,
+  depositId: data.depositId,
+  depositApplied: data.depositApplied,
   status: data.status ?? "draft",
   deliveryMethod: data.deliveryMethod,
   shippingAddress: data.shippingAddress,
@@ -308,6 +310,12 @@ export default function InvoiceDetailScreen() {
     invoice?.status === "paid" || invoice?.payment?.status === "paid";
   const showDemoPay =
     __DEV__ && invoice?.source === "auction" && !isPaid;
+  const depositApplied =
+    typeof invoice?.totals?.depositApplied === "number" ?
+      invoice.totals.depositApplied :
+      typeof invoice?.depositApplied === "number" ?
+        invoice.depositApplied :
+        0;
 
   const handlePayWithCard = useCallback(async () => {
     if (!invoiceId || isPaid) return;
@@ -380,19 +388,14 @@ export default function InvoiceDetailScreen() {
   }, [invoice?.id, invoice?.invoiceNumber]);
 
   useEffect(() => {
-    if (!invoice || !isPaid || paidHandledRef.current || redirecting) return;
+    if (!invoice || !isPaid || paidHandledRef.current) return;
     setRedirecting(true);
     const timer = setTimeout(() => {
       setRedirecting(false);
       paidHandledRef.current = true;
-      if (invoice.source === "auction" && invoice.artworkId) {
-        navigation.navigate("ArtworkDetail", { id: invoice.artworkId });
-      } else {
-        navigation.navigate("Invoices");
-      }
     }, 1200);
     return () => clearTimeout(timer);
-  }, [invoice, isPaid, navigation, redirecting]);
+  }, [invoice, isPaid]);
 
   if (loading) {
     return (
@@ -638,11 +641,21 @@ export default function InvoiceDetailScreen() {
 
             <InvoiceCardSection title="ORDER SUMMARY">
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal</Text>
+                <Text style={styles.summaryLabel}>
+                  {depositApplied > 0 ? "Winning bid" : "Subtotal"}
+                </Text>
                 <Text style={styles.summaryValue}>
                   {formatCurrency(invoice.totals.subtotal, invoice.currency)}
                 </Text>
               </View>
+              {depositApplied > 0 ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Deposit applied</Text>
+                  <Text style={styles.summaryValue}>
+                    -{formatCurrency(depositApplied, invoice.currency)}
+                  </Text>
+                </View>
+              ) : null}
               {typeof invoice.totals.discount === "number" ? (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Discount</Text>

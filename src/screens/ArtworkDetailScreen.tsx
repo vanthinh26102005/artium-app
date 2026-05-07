@@ -19,6 +19,8 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheetModalProvider, BottomSheetModal, BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
+import * as WebBrowser from "expo-web-browser";
+import { httpsCallable } from "firebase/functions";
 
 import { discoverMockData } from "../domains/discover/mockData";
 import { Artwork as DiscoverArtwork } from "../domains/discover/types";
@@ -57,9 +59,14 @@ import {
   createWinnerInvoice,
   demoCloseAuction,
   placeBid,
+  prepareBid,
   subscribeToArtworkAuction,
   subscribeToAuctionBids,
 } from "../domains/auction/services/auctionService";
+import { functions } from "../configs/firebase";
+
+const PAYOS_RETURN_URL_BASE = "artium://payos/return";
+const PAYOS_CANCEL_URL_BASE = "artium://payos/cancel";
 
 export default function ArtworkDetailScreen() {
   const navigation = useNavigation<any>();
@@ -101,6 +108,16 @@ export default function ArtworkDetailScreen() {
   const [isAdvancingStage, setIsAdvancingStage] = useState(false);
   const [isPreparingWinnerInvoice, setIsPreparingWinnerInvoice] = useState(false);
   const [isDemoClosingAuction, setIsDemoClosingAuction] = useState(false);
+  const [depositPrompt, setDepositPrompt] = useState<{
+    depositId: string;
+    paymentInvoiceId: string;
+    checkoutUrl: string;
+    amount: number;
+    depositAmount: number;
+    trustScore: number;
+    threshold: number;
+  } | null>(null);
+  const [isPayingDeposit, setIsPayingDeposit] = useState(false);
 
   // Image viewer state
   const viewerKeyRef = useRef(0);
@@ -270,14 +287,14 @@ export default function ArtworkDetailScreen() {
   const isAuctionEnded =
     hasAuction &&
     (auctionNow >= auctionEndsAt ||
-      ["ended", "settled", "cancelled"].includes(auction.status));
+      ["ended", "awaiting_payment", "settled", "cancelled"].includes(auction.status));
   const isAuctionOwner = !!auction && auction.artistId === currentUser?.uid;
   const isAuctionWinner =
     !!auction?.topBidderId && auction.topBidderId === currentUser?.uid;
   const canOpenWinnerInvoice =
     !!auction?.winnerInvoiceId &&
     isAuctionWinner &&
-    ["ended", "settled"].includes(auction.status);
+    ["ended", "awaiting_payment", "settled"].includes(auction.status);
   const canPrepareWinnerInvoice =
     !!auction &&
     !auction.winnerInvoiceId &&
@@ -702,8 +719,35 @@ export default function ArtworkDetailScreen() {
 
     try {
       setIsPlacingBid(true);
-      await placeBid({ auctionId: auction.id, amount });
-      setShowBidModal(false);
+      const bidPreparation = await prepareBid({
+        auctionId: auction.id,
+        amount,
+        returnUrlBase: PAYOS_RETURN_URL_BASE,
+        cancelUrlBase: PAYOS_CANCEL_URL_BASE,
+      });
+      if (bidPreparation.requiresDeposit) {
+        if (
+          !bidPreparation.depositId ||
+          !bidPreparation.checkoutUrl ||
+          !bidPreparation.paymentInvoiceId ||
+          typeof bidPreparation.depositAmount !== "number"
+        ) {
+          throw new Error("Missing deposit checkout details.");
+        }
+        setDepositPrompt({
+          depositId: bidPreparation.depositId,
+          paymentInvoiceId: bidPreparation.paymentInvoiceId,
+          checkoutUrl: bidPreparation.checkoutUrl,
+          amount,
+          depositAmount: bidPreparation.depositAmount,
+          trustScore: bidPreparation.trustScore,
+          threshold: bidPreparation.threshold,
+        });
+        setShowBidModal(false);
+      } else {
+        await placeBid({ auctionId: auction.id, amount });
+        setShowBidModal(false);
+      }
     } catch (err: any) {
       console.error("Failed to place bid:", err);
       Alert.alert(
@@ -714,6 +758,44 @@ export default function ArtworkDetailScreen() {
       setIsPlacingBid(false);
     }
   }, [auction, bidAmount, isPlacingBid, nextBidAmount]);
+
+  const handlePayDeposit = useCallback(async () => {
+    if (!depositPrompt || isPayingDeposit) return;
+
+    try {
+      setIsPayingDeposit(true);
+      const authResult = await WebBrowser.openAuthSessionAsync(
+        depositPrompt.checkoutUrl,
+        PAYOS_RETURN_URL_BASE
+      );
+      if (authResult.type === "success") {
+        const returnedUrl = authResult.url || "";
+        if (returnedUrl.includes("payos/cancel")) {
+          return;
+        }
+        const finalizePayosPayment = httpsCallable(
+          functions,
+          "finalizePayosPayment"
+        );
+        await finalizePayosPayment({
+          invoiceId: depositPrompt.paymentInvoiceId,
+        });
+        setDepositPrompt(null);
+        Alert.alert(
+          "Deposit paid",
+          "Your bid will appear once the payment is verified."
+        );
+      }
+    } catch (err: any) {
+      console.error("Failed to pay bid deposit:", err);
+      Alert.alert(
+        "Deposit payment failed",
+        err?.message || "Please try again."
+      );
+    } finally {
+      setIsPayingDeposit(false);
+    }
+  }, [depositPrompt, isPayingDeposit]);
 
   // Conditional Rendering
   if (loading) {
@@ -909,6 +991,17 @@ export default function ArtworkDetailScreen() {
             if (!isPlacingBid) setShowBidModal(false);
           }}
           onSubmit={handleSubmitBid}
+        />
+
+        <BidDepositModal
+          visible={!!depositPrompt}
+          auction={auction}
+          deposit={depositPrompt}
+          paying={isPayingDeposit}
+          onClose={() => {
+            if (!isPayingDeposit) setDepositPrompt(null);
+          }}
+          onPay={handlePayDeposit}
         />
 
         {/* Reshare Sheet */}
@@ -1455,6 +1548,111 @@ function BidModal({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function BidDepositModal({
+  visible,
+  auction,
+  deposit,
+  paying,
+  onClose,
+  onPay,
+}: {
+  visible: boolean;
+  auction: Auction | null;
+  deposit: {
+    amount: number;
+    depositAmount: number;
+    trustScore: number;
+    threshold: number;
+  } | null;
+  paying: boolean;
+  onClose: () => void;
+  onPay: () => void;
+}) {
+  if (!auction || !deposit) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 justify-end bg-black/40">
+        <View className="rounded-t-[28px] bg-white px-5 pb-8 pt-5">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xl font-bold text-slate-950">
+              Refundable deposit
+            </Text>
+            <Pressable
+              onPress={onClose}
+              disabled={paying}
+              className="h-10 w-10 items-center justify-center rounded-full bg-slate-100"
+            >
+              <Ionicons name="close" size={20} color="#0F172A" />
+            </Pressable>
+          </View>
+
+          <Text className="mt-2 text-sm leading-5 text-slate-500">
+            Your trust score requires a refundable deposit before this bid can
+            be accepted.
+          </Text>
+
+          <View className="mt-4 gap-2 rounded-2xl bg-slate-50 p-4">
+            <DepositRow label="Trust score" value={`${deposit.trustScore}/${deposit.threshold}`} />
+            <DepositRow
+              label="Bid amount"
+              value={formatAuctionCurrency(deposit.amount, auction.currency)}
+            />
+            <DepositRow
+              label="Deposit required"
+              value={formatAuctionCurrency(deposit.depositAmount, auction.currency)}
+            />
+          </View>
+
+          <View className="mt-4 gap-2">
+            <Text className="text-xs leading-4 text-slate-500">
+              Deposit required: 10%.
+            </Text>
+            <Text className="text-xs leading-4 text-slate-500">
+              It will be deducted if you win and refunded if you lose after
+              auction settlement.
+            </Text>
+            <Text className="text-xs leading-4 text-slate-500">
+              It may be forfeited if you win but do not complete payment.
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={onPay}
+            disabled={paying}
+            className={`mt-5 flex-row items-center justify-center gap-2 rounded-2xl px-4 py-4 ${
+              paying ? "bg-slate-300" : "bg-[#0B73FF]"
+            }`}
+          >
+            {paying ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Ionicons name="card-outline" size={20} color="#ffffff" />
+            )}
+            <Text className="text-base font-bold text-white">
+              {paying ? "Opening payment..." : "Pay deposit"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DepositRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row items-center justify-between">
+      <Text className="text-sm text-slate-500">{label}</Text>
+      <Text className="text-sm font-bold text-slate-950">{value}</Text>
+    </View>
   );
 }
 

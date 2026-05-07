@@ -13,7 +13,14 @@ import {
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { firestore, functions } from "@/configs/firebase";
-import type { Auction, AuctionBid, AuctionStage, AuctionStatus } from "../type";
+import type {
+  Auction,
+  AuctionBid,
+  AuctionDeposit,
+  AuctionStage,
+  AuctionStatus,
+  DepositStatus,
+} from "../type";
 
 const AUCTIONS_COLLECTION = "auctions";
 const BIDS_COLLECTION = "bids";
@@ -36,13 +43,32 @@ export type CreateAuctionResult = {
 export type PlaceBidInput = {
   auctionId: string;
   amount: number;
+  depositId?: string;
 };
 
 export type PlaceBidResult = {
   auctionId: string;
+  bidId: string;
   currentBid: number;
   topBidderId: string;
   bidCount: number;
+};
+
+export type PrepareBidInput = {
+  auctionId: string;
+  amount: number;
+  returnUrlBase?: string;
+  cancelUrlBase?: string;
+};
+
+export type PrepareBidResult = {
+  requiresDeposit: boolean;
+  trustScore: number;
+  threshold: number;
+  depositId?: string;
+  depositAmount?: number;
+  checkoutUrl?: string;
+  paymentInvoiceId?: string;
 };
 
 export type AdvanceAuctionStageInput = {
@@ -79,6 +105,11 @@ export type DemoMarkAuctionInvoicePaidResult = {
   status: "paid";
 };
 
+export type DemoMarkDepositRefundedResult = {
+  depositId: string;
+  status: "refunded";
+};
+
 // Chuyen cac kieu thoi gian Firestore/JS ve ISO string de UI hien countdown de hon.
 const toIsoString = (value: unknown): string => {
   if (value instanceof Timestamp) return value.toDate().toISOString();
@@ -113,7 +144,16 @@ const mapBid = (id: string, auctionId: string, data: any): AuctionBid => ({
   bidderId: data.bidderId ?? "",
   amount: Number(data.amount ?? 0),
   createdAt: toIsoString(data.createdAt),
+  depositRequired: data.depositRequired,
+  depositId: data.depositId,
+  depositAmount:
+    typeof data.depositAmount === "number" ? data.depositAmount : undefined,
+  depositStatus: data.depositStatus,
 });
+
+const isCurrentArtworkAuction = (auction: Auction) => {
+  return !(auction.status === "ended" && auction.bidCount === 0);
+};
 
 export const getAuctionById = async (
   auctionId: string
@@ -130,14 +170,15 @@ export const getAuctionByArtworkId = async (
 ): Promise<Auction | null> => {
   const q = query(
     collection(firestore, AUCTIONS_COLLECTION),
-    where("artworkId", "==", artworkId),
-    limit(1)
+    where("artworkId", "==", artworkId)
   );
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) return null;
-  const auctionDoc = snapshot.docs[0];
-  return mapAuction(auctionDoc.id, auctionDoc.data());
+  const auctions = snapshot.docs
+    .map((auctionDoc) => mapAuction(auctionDoc.id, auctionDoc.data()))
+    .filter(isCurrentArtworkAuction);
+  return auctions[0] ?? null;
 };
 
 // Lang nghe 1 auction realtime. UI dung ham nay de currentBid nhay ngay khi co bid moi.
@@ -168,8 +209,7 @@ export const subscribeToArtworkAuction = (
 ): Unsubscribe => {
   const q = query(
     collection(firestore, AUCTIONS_COLLECTION),
-    where("artworkId", "==", artworkId),
-    limit(1)
+    where("artworkId", "==", artworkId)
   );
 
   return onSnapshot(
@@ -180,8 +220,10 @@ export const subscribeToArtworkAuction = (
         return;
       }
 
-      const auctionDoc = snapshot.docs[0];
-      onUpdate(mapAuction(auctionDoc.id, auctionDoc.data()));
+      const auctions = snapshot.docs
+        .map((auctionDoc) => mapAuction(auctionDoc.id, auctionDoc.data()))
+        .filter(isCurrentArtworkAuction);
+      onUpdate(auctions[0] ?? null);
     },
     (error) => {
       console.error("Failed to subscribe to artwork auction:", error);
@@ -228,6 +270,15 @@ export const createAuction = async (
   const createAuctionFn =
     httpsCallable<CreateAuctionInput, CreateAuctionResult>(functions, "createAuction");
   const result = await createAuctionFn(input);
+  return result.data;
+};
+
+export const prepareBid = async (
+  input: PrepareBidInput
+): Promise<PrepareBidResult> => {
+  const prepareBidFn =
+    httpsCallable<PrepareBidInput, PrepareBidResult>(functions, "prepareBid");
+  const result = await prepareBidFn(input);
   return result.data;
 };
 
@@ -288,3 +339,17 @@ export const demoMarkAuctionInvoicePaid = async (
   const result = await demoMarkPaidFn(input);
   return result.data;
 };
+
+export const demoMarkDepositRefunded = async (
+  input: { depositId: string }
+): Promise<DemoMarkDepositRefundedResult> => {
+  const demoRefundFn =
+    httpsCallable<{ depositId: string }, DemoMarkDepositRefundedResult>(
+      functions,
+      "demoMarkDepositRefunded"
+    );
+  const result = await demoRefundFn(input);
+  return result.data;
+};
+
+export type { AuctionDeposit, DepositStatus };
