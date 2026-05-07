@@ -29,6 +29,7 @@ import { doc, getDoc, onSnapshot, Timestamp } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import * as WebBrowser from "expo-web-browser";
 import type { HomeStackParamList } from "../app/navigation/Stack/HomeStack";
+import { demoMarkAuctionInvoicePaid } from "../domains/auction/services/auctionService";
 
 const DELIVERY_OPTION_SELLER = "Pick up / Ship by seller";
 const DELIVERY_OPTION_ARTIUM = "Ship by Artium";
@@ -86,6 +87,10 @@ const toMillis = (value: any) => {
 const mapInvoiceData = (id: string, data: any): Invoice => ({
   id,
   invoiceNumber: data.invoiceNumber,
+  source: data.source,
+  type: data.type,
+  auctionId: data.auctionId,
+  artworkId: data.artworkId,
   status: data.status ?? "draft",
   deliveryMethod: data.deliveryMethod,
   shippingAddress: data.shippingAddress,
@@ -99,6 +104,7 @@ const mapInvoiceData = (id: string, data: any): Invoice => ({
   isActive: data.isActive ?? true,
   paidAt: toMillis(data.paidAt),
   sellerId: data.sellerId,
+  buyerId: data.buyerId,
   sellerSnapshot: data.sellerSnapshot,
   buyer: data.buyer,
   items: data.items ?? [],
@@ -129,6 +135,7 @@ export default function InvoiceDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [demoPaying, setDemoPaying] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const paidHandledRef = useRef(false);
   const { setHidden } = useTabBarVisibility();
@@ -299,6 +306,8 @@ export default function InvoiceDetailScreen() {
 
   const isPaid =
     invoice?.status === "paid" || invoice?.payment?.status === "paid";
+  const showDemoPay =
+    __DEV__ && invoice?.source === "auction" && !isPaid;
 
   const handlePayWithCard = useCallback(async () => {
     if (!invoiceId || isPaid) return;
@@ -336,6 +345,23 @@ export default function InvoiceDetailScreen() {
     }
   }, [createPayosPaymentLink, finalizePayosPayment, invoiceId, isPaid]);
 
+  const handleDemoMarkPaid = useCallback(async () => {
+    if (!invoiceId || isPaid || demoPaying) return;
+    try {
+      setDemoPaying(true);
+      await demoMarkAuctionInvoicePaid({ invoiceId });
+      await handleRefresh();
+    } catch (err: any) {
+      console.error("Failed to mark demo invoice paid:", err);
+      Alert.alert(
+        "Demo payment unavailable",
+        err?.message || "Run this action against the Functions emulator/dev mode."
+      );
+    } finally {
+      setDemoPaying(false);
+    }
+  }, [demoPaying, handleRefresh, invoiceId, isPaid]);
+
   useFocusEffect(
     React.useCallback(() => {
       setHidden(true);
@@ -359,7 +385,11 @@ export default function InvoiceDetailScreen() {
     const timer = setTimeout(() => {
       setRedirecting(false);
       paidHandledRef.current = true;
-      navigation.navigate("Invoices");
+      if (invoice.source === "auction" && invoice.artworkId) {
+        navigation.navigate("ArtworkDetail", { id: invoice.artworkId });
+      } else {
+        navigation.navigate("Invoices");
+      }
     }, 1200);
     return () => clearTimeout(timer);
   }, [invoice, isPaid, navigation, redirecting]);
@@ -656,6 +686,27 @@ export default function InvoiceDetailScreen() {
                   )}
                 </Pressable>
               </View>
+              {showDemoPay ? (
+                <Pressable
+                  style={[
+                    styles.demoPaymentButton,
+                    demoPaying && styles.paymentButtonDisabled,
+                  ]}
+                  onPress={handleDemoMarkPaid}
+                  disabled={demoPaying}
+                >
+                  {demoPaying ? (
+                    <ActivityIndicator color="#0F172A" />
+                  ) : (
+                    <>
+                      <Ionicons name="flash-outline" size={16} color="#0F172A" />
+                      <Text style={styles.demoPaymentButtonText}>
+                        Mark paid demo
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              ) : null}
             </InvoiceCardSection>
 
             <View style={styles.trustCard}>
@@ -1130,6 +1181,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  demoPaymentButton: {
+    marginTop: 12,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+  },
+  demoPaymentButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
   },
   trustCard: {
     borderRadius: 20,

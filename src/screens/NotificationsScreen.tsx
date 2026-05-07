@@ -26,6 +26,8 @@ type NotificationItem = {
   createdAt: number;
   read?: boolean;
   postId?: string;
+  auctionId?: string;
+  artworkId?: string;
 };
 
 const formatTime = (ts: number) => {
@@ -43,6 +45,9 @@ const typeIcon: Record<string, keyof typeof Ionicons.glyphMap> = {
   like: "heart-outline",
   comment: "chatbubble-ellipses-outline",
   reshare: "repeat-outline",
+  auction_outbid: "pricetag-outline",
+  auction_ended: "trophy-outline",
+  auction_won: "receipt-outline",
 };
 
 export default function NotificationsScreen() {
@@ -102,6 +107,8 @@ export default function NotificationsScreen() {
             createdAt,
             read: data.read,
             postId: data.postId,
+            auctionId: data.auctionId,
+            artworkId: data.artworkId,
           };
         });
         setItems(list);
@@ -122,6 +129,18 @@ export default function NotificationsScreen() {
     }
 
     if (!item.postId) {
+      if (
+        (item.type === "auction_outbid" || item.type === "auction_ended") &&
+        item.artworkId
+      ) {
+        rootNavigate("ArtworkDetail", { id: item.artworkId });
+        return;
+      }
+      if (item.type === "auction_won" && item.artworkId) {
+        rootNavigate("ArtworkDetail", { id: item.artworkId });
+        return;
+      }
+
       console.warn("No postId in notification");
       return;
     }

@@ -47,6 +47,7 @@ function HomeEventCard({ item, onPress, width, height }: Props) {
           contentFit="cover"
           transition={0}
           cachePolicy="memory-disk"
+          priority="normal"
         />
         {showCalendar ? (
           <View className="absolute top-3 right-3 rounded-2xl bg-white px-3 py-2 shadow-sm">

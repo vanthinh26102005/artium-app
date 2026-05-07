@@ -46,3 +46,6 @@ serviceAccount.json
 # Gemini context file
 GEMINI.md
 AGENTS.md
+
+# AI workspace notes
+.ai-workspace/

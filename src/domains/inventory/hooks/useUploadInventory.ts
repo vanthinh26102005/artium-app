@@ -25,6 +25,7 @@ export function useUploadInventory() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [scrollToError, setScrollToError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("Submitting...");
 
   // Computed states
   const canContinue = images.length > 0;
@@ -126,16 +127,20 @@ export function useUploadInventory() {
     const hasPermission = await ensurePermission(source);
     if (!hasPermission) return;
 
+    const remainingSlots = Math.max(MAX_IMAGES - images.length, 1);
     const pickerResult =
       source === "camera"
         ? await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.9,
+            quality: 0.6,
+            exif: false,
           })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsMultipleSelection: true,
-            quality: 0.9,
+            selectionLimit: remainingSlots,
+            quality: 0.6,
+            exif: false,
           });
 
     if (pickerResult.canceled || !pickerResult.assets?.length) return;
@@ -156,7 +161,7 @@ export function useUploadInventory() {
       }
       return nextImages.slice(0, MAX_IMAGES);
     });
-  }, [chooseSource, ensurePermission]);
+  }, [chooseSource, ensurePermission, images.length]);
 
   const handleRemoveImage = useCallback((index: number) => {
     setImages((prev) => prev.filter((_, idx) => idx !== index));
@@ -224,6 +229,7 @@ export function useUploadInventory() {
     if (submitting) return;
     setErrors({});
     setScrollToError(false);
+    setSubmitMessage("Preparing upload...");
     setSubmitting(true);
 
     const yearNumber = parseInt(details.year, 10);
@@ -240,57 +246,67 @@ export function useUploadInventory() {
     const authorAvatar = profile.user.avatarUri || currentUser.photoURL || "";
 
     try {
+      let uploadedCount = 0;
+      setSubmitMessage(`Uploading images 0/${images.length}`);
       const uploadedImages = await Promise.all(
-        images.map(async (img) => (await uploadIfLocal(img.uri, "artworks")) || img.uri)
+        images.map(async (img) => {
+          const uploadedUri = (await uploadIfLocal(img.uri, "artworks")) || img.uri;
+          uploadedCount += 1;
+          setSubmitMessage(`Uploading images ${uploadedCount}/${images.length}`);
+          return uploadedUri;
+        })
       );
+
+      setSubmitMessage("Saving artwork...");
       const uploadedAuthorAvatar =
         (await uploadIfLocal(authorAvatar, "avatars")) || authorAvatar;
 
-      await setDoc(
-        doc(firestore, "artists", currentUser.uid),
-        {
-          name: authorName,
-          avatar: uploadedAuthorAvatar,
-          verified: false,
-        },
-        { merge: true }
-      );
+      const artistSnapshot = {
+        name: authorName,
+        avatar: uploadedAuthorAvatar,
+        verified: false,
+      };
 
-      await addDoc(collection(firestore, "artworks"), {
-        authorId: currentUser.uid,
-        authorName,
-        artistId: currentUser.uid,
-        artist: {
-          name: authorName,
-          avatar: uploadedAuthorAvatar,
-          verified: false,
-        },
-        title: details.title || "Untitled",
-        description: details.description || "",
-        year: Number.isFinite(yearNumber) ? yearNumber : new Date().getFullYear(),
-        edition: Number.isFinite(editionNumber) ? editionNumber : 1,
-        materials: details.materials || "",
-        price: details.price ? `USD $${details.price}` : "Price on Request",
-        availabilityNote: "",
-        images: uploadedImages,
-        tags: selectedTags,
-        dimension: {
-          h: Number.isFinite(height) ? height : 0,
-          w: Number.isFinite(width) ? width : 0,
-          d: Number.isFinite(depth) ? depth : 0,
-          unit: details.dimensions.unit,
-        },
-        weight: Number.isFinite(weightValue)
-          ? `${weightValue} ${details.weight.unit}`
-          : "0",
-        shipping: [{ title: "Shipped within 7 working days in a box" }],
-        stats: { worksSold: 0, buyers: 0 },
-        metrics: { views: 0, likes: 0, shares: 0 },
-        popularityScore: 0,
-        status: details.status,
-        folder: DEFAULT_UPLOAD_FOLDER,
-        createdAt: serverTimestamp(),
-      });
+      await Promise.all([
+        setDoc(
+          doc(firestore, "artists", currentUser.uid),
+          artistSnapshot,
+          { merge: true }
+        ),
+        addDoc(collection(firestore, "artworks"), {
+          authorId: currentUser.uid,
+          authorName,
+          artistId: currentUser.uid,
+          artist: {
+            ...artistSnapshot,
+          },
+          title: details.title || "Untitled",
+          description: details.description || "",
+          year: Number.isFinite(yearNumber) ? yearNumber : new Date().getFullYear(),
+          edition: Number.isFinite(editionNumber) ? editionNumber : 1,
+          materials: details.materials || "",
+          price: details.price ? `USD $${details.price}` : "Price on Request",
+          availabilityNote: "",
+          images: uploadedImages,
+          tags: selectedTags,
+          dimension: {
+            h: Number.isFinite(height) ? height : 0,
+            w: Number.isFinite(width) ? width : 0,
+            d: Number.isFinite(depth) ? depth : 0,
+            unit: details.dimensions.unit,
+          },
+          weight: Number.isFinite(weightValue)
+            ? `${weightValue} ${details.weight.unit}`
+            : "0",
+          shipping: [{ title: "Shipped within 7 working days in a box" }],
+          stats: { worksSold: 0, buyers: 0 },
+          metrics: { views: 0, likes: 0, shares: 0 },
+          popularityScore: 0,
+          status: details.status,
+          folder: DEFAULT_UPLOAD_FOLDER,
+          createdAt: serverTimestamp(),
+        }),
+      ]);
 
       navigation.navigate("Tabs", {
         screen: "Home",
@@ -301,9 +317,14 @@ export function useUploadInventory() {
       resetForm();
     } catch (error) {
       console.error("Failed to upload artwork:", error);
-      Alert.alert("Upload failed", "Could not upload artwork. Please try again.");
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Could not upload artwork. Please try again.";
+      Alert.alert("Upload failed", message);
     } finally {
       setSubmitting(false);
+      setSubmitMessage("Submitting...");
     }
   }, [
     validateDetails,
@@ -342,5 +363,7 @@ export function useUploadInventory() {
     setScrollToError,
     selectedTags,
     handleToggleTag,
+    submitting,
+    submitMessage,
   };
 }

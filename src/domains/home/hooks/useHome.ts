@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Image } from "expo-image";
 import { HOME_CONSTANTS } from "../constants";
 import { getLatestBlogs, getOldestEditorialsAsNews } from "../services/blogService";
 import { getEvents } from "../../discover/services/eventService"; // Re-use from discover
@@ -6,6 +7,19 @@ import { getTrendingArtworks } from "../../artwork/services/artworkService"; // 
 import { getPopularArtists } from "../services/artistService"; // New service
 import type { HomeBlogItem, HomeNewsItem, HomeEventItem, HomeFollowingProfile } from "../types";
 import type { Artwork } from "../../discover/types";
+
+const prefetchImages = (urls: Array<string | undefined | null>) => {
+  const uniqueUrls = Array.from(
+    new Set(
+      urls.filter(
+        (url): url is string => typeof url === "string" && url.trim().length > 0
+      )
+    )
+  );
+  if (uniqueUrls.length) {
+    void Image.prefetch(uniqueUrls.slice(0, 18));
+  }
+};
 
 /**
  * Hook for home screen data.
@@ -32,30 +46,60 @@ export function useHome() {
         }
         setError(null);
 
-        const [
-          fetchedBlogs,
-          fetchedNews,
-          fetchedEvents,
-          fetchedTrending,
-          fetchedArtists,
-        ] = await Promise.all([
-          getLatestBlogs(5),
-          getOldestEditorialsAsNews(5),
-          getEvents(5).then((res) => res.events.map(e => ({
-            ...e,
-            dateLabel: e.timeLabel ?? "",
-            dateISO: e.datetime ?? e.startDate,
-            label: e.eventType
-          }))), // Fetch 5 events
-          getTrendingArtworks(10), // Fetch 10 trending artworks for "Pick for You"
-          getPopularArtists(15), // Fetch 15 popular artists
+        const loadBlogs = getLatestBlogs(5).then((fetchedBlogs) => {
+          setBlogs(fetchedBlogs);
+          prefetchImages(
+            fetchedBlogs.flatMap((item) => [item.image, item.authorAvatar])
+          );
+          return fetchedBlogs;
+        });
+
+        const loadNews = getOldestEditorialsAsNews(5).then((fetchedNews) => {
+          setNews(fetchedNews);
+          prefetchImages(fetchedNews.map((item) => item.image));
+          return fetchedNews;
+        });
+
+        const loadEvents = getEvents(5, null, {
+          includeAttendeeCounts: false,
+        }).then((res) => {
+          const fetchedEvents = res.events.map((event) => ({
+            ...event,
+            dateLabel: event.timeLabel ?? "",
+            dateISO: event.datetime ?? event.startDate,
+            label: event.eventType,
+          }));
+          setEvents(fetchedEvents);
+          prefetchImages(fetchedEvents.map((item) => item.image));
+          return fetchedEvents;
+        });
+
+        const loadTrending = getTrendingArtworks(10).then((fetchedTrending) => {
+          setSellItems(fetchedTrending);
+          prefetchImages(
+            fetchedTrending.flatMap((item) => [item.image, item.artistAvatar])
+          );
+          return fetchedTrending;
+        });
+
+        const loadArtists = getPopularArtists(15).then((fetchedArtists) => {
+          setFollowing(fetchedArtists);
+          prefetchImages(fetchedArtists.map((item) => item.avatar));
+          return fetchedArtists;
+        });
+
+        const results = await Promise.allSettled([
+          loadBlogs,
+          loadNews,
+          loadEvents,
+          loadTrending,
+          loadArtists,
         ]);
 
-        setBlogs(fetchedBlogs);
-        setNews(fetchedNews);
-        setEvents(fetchedEvents);
-        setSellItems(fetchedTrending);
-        setFollowing(fetchedArtists);
+        const failed = results.find((result) => result.status === "rejected");
+        if (failed && failed.status === "rejected") {
+          throw failed.reason;
+        }
       } catch (err: any) {
         setError(err);
       } finally {

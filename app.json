@@ -45,6 +45,7 @@
       "expo-web-browser",
       "expo-secure-store",
       "expo-video",
+      "expo-camera",
       [
         "expo-image-picker",
         {

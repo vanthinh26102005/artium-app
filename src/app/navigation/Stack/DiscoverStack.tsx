@@ -18,6 +18,7 @@ import BlogScreen from "../../../screens/BlogScreen";
 import BlogDetailScreen from "../../../screens/BlogDetailScreen";
 import type { ArtworkDetail } from "../../../domains/artwork/types";
 import type { EventItem } from "../../../domains/discover/types";
+import ArtViewARScreen from "../../../screens/ArtViewARScreen";
 
 export type DiscoverStackParamList = {
   DiscoverMain: undefined;
@@ -38,6 +39,12 @@ export type DiscoverStackParamList = {
   EditArtwork: { artwork: ArtworkDetail };
   Blog: undefined;
   BlogDetail: { blogId: string };
+  ArtViewAR: {
+    artworkId: string;
+    title: string;
+    imageUrl?: string;
+    dimension?: { w?: number; h?: number; unit?: string };
+  };
 };
 
 const Stack = createNativeStackNavigator<DiscoverStackParamList>();
@@ -58,7 +65,7 @@ export default function DiscoverStack() {
       <Stack.Screen name="EditArtwork" component={EditArtworkScreen} />
       <Stack.Screen name="Blog" component={BlogScreen} />
       <Stack.Screen name="BlogDetail" component={BlogDetailScreen} />
+      <Stack.Screen name="ArtViewAR" component={ArtViewARScreen} />
     </Stack.Navigator>
   );
 }
-

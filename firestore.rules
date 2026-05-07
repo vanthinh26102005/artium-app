@@ -73,6 +73,19 @@
         allow create, update: if isOwner(artistId);
         allow delete: if false;
       }
+
+      match /auctions/{auctionId} {
+        allow read: if true;
+        // Giá đấu và người thắng phải do Cloud Functions/Admin SDK ghi
+        // để client không tự sửa currentBid/topBidderId/endsAt.
+        allow create, update, delete: if false;
+
+        match /bids/{bidId} {
+          allow read: if true;
+          allow create, update, delete: if false;
+        }
+      }
+
       match /editorials/{editorialId} {
         allow read: if true;
         allow write: if false; // No client-side writes allowed

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { View, Dimensions, ViewStyle, Pressable } from "react-native";
 import { Image } from "expo-image";
 import Carousel from "react-native-reanimated-carousel";
@@ -35,6 +35,15 @@ export default function ArtworkCarousel({
   const CAROUSEL_WIDTH = SCREEN_WIDTH - 32; // padding 16px each side
   const ITEM_WIDTH = CAROUSEL_WIDTH - 64; // minus padding and spacing
   const CAROUSEL_HEIGHT = ITEM_WIDTH * 1.1; // 1:1.1 ratio
+
+  useEffect(() => {
+    const remoteImages = images.filter(
+      (uri) => typeof uri === "string" && uri.startsWith("http")
+    );
+    if (remoteImages.length) {
+      void Image.prefetch(remoteImages.slice(0, 5));
+    }
+  }, [images]);
 
   // Prepare images array for viewer
   const viewerImages = images.map((uri) => ({ uri }));
@@ -154,6 +163,7 @@ function CarouselItem({
           style={{ width: "100%", height: "100%" }}
           contentFit="cover"
           cachePolicy="memory-disk"
+          priority={index === 0 ? "high" : "normal"}
           transition={0}
           onLoadEnd={onImageLoad}
         />

@@ -42,6 +42,7 @@ function HomeBlogCard({ item, onPress, width, height }: Props) {
           contentFit="cover"
           transition={0}
           cachePolicy="memory-disk"
+          priority="normal"
         />
         <View className="flex-1 px-3 py-3 justify-between">
           <View className="flex-row items-center gap-2">
@@ -53,6 +54,7 @@ function HomeBlogCard({ item, onPress, width, height }: Props) {
                   contentFit="cover"
                   transition={0}
                   cachePolicy="memory-disk"
+                  priority="low"
                 />
               ) : null}
             </View>

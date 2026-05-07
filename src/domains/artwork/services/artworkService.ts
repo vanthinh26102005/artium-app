@@ -53,6 +53,16 @@ const formatWeight = (weight: any): string => {
   return "";
 };
 
+const formatAuctionPrice = (amount: number, currency?: string): string => {
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  if (currency === "VND") {
+    return `${Math.round(amount).toLocaleString("vi-VN")} VND`;
+  }
+  return `$${amount.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  })}`;
+};
+
 const resolveArtistSnapshot = (data: any) => {
   const readString = (value: any) =>
     typeof value === "string" ? value.trim() : "";
@@ -144,6 +154,72 @@ const resolveFirstImage = (images: any): string => {
   return normalizeImageList(images)[0] || "";
 };
 
+const mapDiscoverArtwork = (
+  id: string,
+  data: DocumentData,
+  isTrending: boolean
+): DiscoverArtwork => {
+  const artist = resolveArtistSnapshot(data);
+  return {
+    id,
+    title: data.title || "Untitled",
+    artist: artist.name || "Unknown Artist",
+    artistId: data.artistId || data.authorId,
+    artistAvatar: artist.avatar || "",
+    image: resolveFirstImage(data.images),
+    price: formatPrice(data.price),
+    isTrending,
+    saleMode: data.saleMode,
+    auctionId: data.auctionId,
+    status: data.status,
+  };
+};
+
+const attachAuctionSummaries = async (
+  artworks: DiscoverArtwork[]
+): Promise<DiscoverArtwork[]> => {
+  const auctionIds = Array.from(
+    new Set(
+      artworks
+        .map((artwork) => artwork.auctionId)
+        .filter((auctionId): auctionId is string => !!auctionId)
+    )
+  );
+  if (!auctionIds.length) return artworks;
+
+  const auctionEntries = await Promise.all(
+    auctionIds.map(async (auctionId) => {
+      try {
+        const snap = await getDoc(doc(firestore, "auctions", auctionId));
+        return [auctionId, snap.exists() ? snap.data() : null] as const;
+      } catch (error) {
+        console.warn("Unable to load auction summary:", auctionId, error);
+        return [auctionId, null] as const;
+      }
+    })
+  );
+  const auctionsById = new Map(auctionEntries);
+
+  return artworks.map((artwork) => {
+    if (!artwork.auctionId) return artwork;
+    const auction = auctionsById.get(artwork.auctionId);
+    if (!auction) return artwork;
+
+    const currentBid = Number(auction.currentBid ?? auction.startingPrice ?? 0);
+    const currency =
+      typeof auction.currency === "string" && auction.currency
+        ? auction.currency
+        : "USD";
+    const currentBidLabel = formatAuctionPrice(currentBid, currency);
+    return {
+      ...artwork,
+      auctionCurrentBid: currentBid,
+      auctionCurrency: currency,
+      price: currentBidLabel ? `Current bid ${currentBidLabel}` : artwork.price,
+    };
+  });
+};
+
 // --- METRIC UPDATES ---
 
 export const incrementArtworkView = async (artworkId: string): Promise<void> => {
@@ -215,19 +291,9 @@ export const getArtworks = async (
     }
 
     const snapshot = await getDocs(artworkQuery);
-    const artworks = snapshot.docs.map((doc) => {
-      const data = doc.data();
-      const artist = resolveArtistSnapshot(data);
-      return {
-        id: doc.id,
-        title: data.title || "Untitled",
-        artist: artist.name || "Unknown Artist",
-        artistAvatar: artist.avatar || "",
-        image: resolveFirstImage(data.images),
-        price: formatPrice(data.price),
-        isTrending: false,
-      };
-    });
+    const artworks = await attachAuctionSummaries(
+      snapshot.docs.map((doc) => mapDiscoverArtwork(doc.id, doc.data(), false))
+    );
 
     return {
       artworks,
@@ -252,19 +318,9 @@ export const getTrendingArtworks = async (count: number = 10): Promise<DiscoverA
     );
     const querySnapshot = await getDocs(artworkQuery);
 
-    return querySnapshot.docs.map((doc) => {
-      const data = doc.data();
-      const artist = resolveArtistSnapshot(data);
-      return {
-        id: doc.id,
-        title: data.title || "Untitled",
-        artist: artist.name || "Unknown Artist",
-        artistAvatar: artist.avatar || "",
-        image: resolveFirstImage(data.images),
-        price: formatPrice(data.price),
-        isTrending: true,
-      };
-    });
+    return attachAuctionSummaries(
+      querySnapshot.docs.map((doc) => mapDiscoverArtwork(doc.id, doc.data(), true))
+    );
   } catch (error) {
     console.error("Error getting trending artworks:", error);
     throw error;
@@ -330,6 +386,8 @@ export const getArtworkById = async (id: string, userId?: string): Promise<Artwo
       })),
       description: data.description || "",
       metrics: data.metrics,
+      saleMode: data.saleMode,
+      auctionId: data.auctionId,
       status: data.status,
       isActive: data.isActive,
       soldAt: data.soldAt?.toDate?.() ? data.soldAt.toDate().getTime() : undefined,

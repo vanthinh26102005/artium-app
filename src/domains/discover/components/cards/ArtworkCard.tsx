@@ -61,6 +61,9 @@ export default function ArtworkCard({
   onPress: () => void;
   onLayout?: (event: LayoutChangeEvent) => void;
 }) {
+  const isAuction =
+    item.saleMode === "auction" || item.status === "on_auction" || !!item.auctionId;
+
   return (
     <Pressable
       onPress={onPress}
@@ -75,6 +78,7 @@ export default function ArtworkCard({
           style={{ aspectRatio: 3 / 4, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}
           contentFit="cover"
           cachePolicy="memory-disk"
+          priority="high"
           transition={0}
         />
         {item.isTrending ? (
@@ -86,6 +90,16 @@ export default function ArtworkCard({
               <Ionicons name="flame" size={14} color="#F97316" />
               <Text className="text-[11px] font-semibold uppercase text-[#F97316]">
                 Trending
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {isAuction ? (
+          <View className="absolute top-3 left-3">
+            <View className="flex-row items-center gap-1 rounded-full bg-[#0B73FF] px-3 py-1">
+              <Ionicons name="radio-outline" size={14} color="#FFFFFF" />
+              <Text className="text-[11px] font-bold uppercase text-white">
+                Live Auction
               </Text>
             </View>
           </View>
@@ -109,6 +123,7 @@ export default function ArtworkCard({
                   style={{ width: "100%", height: "100%" }}
                   contentFit="cover"
                   cachePolicy="memory-disk"
+                  priority="normal"
                   transition={0}
                 />
               </View>
@@ -146,7 +161,11 @@ export default function ArtworkCard({
                 style={pricePillStyle}
               >
                 <View className="flex-row items-center gap-1.5">
-                  <Ionicons name="pricetag" size={14} color="#2563EB" />
+                  <Ionicons
+                    name={isAuction ? "hammer" : "pricetag"}
+                    size={14}
+                    color="#2563EB"
+                  />
                   <Text className="text-[14px] font-bold text-[#1E40AF] tracking-tight">
                     {item.price}
                   </Text>

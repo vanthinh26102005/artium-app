@@ -43,6 +43,10 @@ const toMillis = (value: any) => {
 const mapInvoice = (id: string, data: any): Invoice => ({
   id,
   invoiceNumber: data.invoiceNumber,
+  source: data.source,
+  type: data.type,
+  auctionId: data.auctionId,
+  artworkId: data.artworkId,
   status: data.status ?? "draft",
   deliveryMethod: data.deliveryMethod,
   shippingAddress: data.shippingAddress,
@@ -56,6 +60,7 @@ const mapInvoice = (id: string, data: any): Invoice => ({
   isActive: data.isActive ?? true,
   paidAt: toMillis(data.paidAt),
   sellerId: data.sellerId,
+  buyerId: data.buyerId,
   sellerSnapshot: data.sellerSnapshot,
   buyer: data.buyer,
   items: data.items ?? [],

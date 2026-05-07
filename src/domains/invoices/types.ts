@@ -51,6 +51,10 @@ export type InvoiceTotals = {
 export type Invoice = {
   id: string;
   invoiceNumber?: string;
+  source?: "auction" | string;
+  type?: "auction" | string;
+  auctionId?: string;
+  artworkId?: string;
   status: InvoiceStatus;
   deliveryMethod?: InvoiceDeliveryMethod;
   shippingAddress?: AddressForm;
